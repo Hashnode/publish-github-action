@@ -1,0 +1,30 @@
+{
+  "name": "publish-github-action",
+  "version": "1.0.0",
+  "description": "Publish markdown files from a GitHub repository to your Hashnode publication",
+  "private": true,
+  "author": "Hashnode",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Hashnode/publish-github-action.git"
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "ncc build src/index.ts -o dist --license licenses.txt",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@actions/exec": "^1.1.1",
+    "@actions/github": "^6.0.0",
+    "gray-matter": "^4.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@vercel/ncc": "^0.38.3",
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.0"
+  }
+}

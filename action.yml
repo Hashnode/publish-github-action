@@ -1,0 +1,43 @@
+name: "Publish to Hashnode"
+description: "Publish markdown files from your repository to a Hashnode publication. Requires a publication on Hashnode Pro."
+author: "Hashnode"
+branding:
+  icon: "upload-cloud"
+  color: "blue"
+
+inputs:
+  access-token:
+    description: "Hashnode Personal Access Token. Generate one in Settings > Developer, store it as a repository secret."
+    required: true
+  publication-id:
+    description: "Target publication id. Provide this or publication-host."
+    required: false
+  publication-host:
+    description: "Target publication host, e.g. myblog.hashnode.dev. Provide this or publication-id."
+    required: false
+  posts-directory:
+    description: "Directory containing the markdown posts, relative to the repository root."
+    required: false
+    default: "."
+  gql-endpoint:
+    description: "Hashnode GraphQL endpoint."
+    required: false
+    default: "https://gql-beta.hashnode.com"
+  dry-run:
+    description: "Parse, validate and report without publishing anything."
+    required: false
+    default: "false"
+  max-files:
+    description: "Maximum number of markdown files processed per run."
+    required: false
+    default: "10"
+
+outputs:
+  result:
+    description: "JSON summary of the run: published, updated, drafted, skipped and errored files."
+  result_summary:
+    description: "One-line human readable summary."
+
+runs:
+  using: "node24"
+  main: "dist/index.js"
