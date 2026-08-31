@@ -93,6 +93,12 @@ export const MUTATIONS = {
     createDraft(input: $input) { draft { id slug } }
   }`,
   createImageUploadURL: `mutation ($input: CreateImageUploadInput!) {
-    createImageUploadURL(input: $input) { presignedPost { url fields } }
+    createImageUploadURL(input: $input) {
+      presignedPost { url fields }
+      presignedPut { url cdnUrl key }
+    }
+  }`,
+  confirmImageUpload: `mutation ($input: ConfirmImageUploadInput!) {
+    confirmImageUpload(input: $input) { ok cdnUrl }
   }`,
 };

@@ -35424,7 +35424,13 @@ exports.MUTATIONS = {
     createDraft(input: $input) { draft { id slug } }
   }`,
     createImageUploadURL: `mutation ($input: CreateImageUploadInput!) {
-    createImageUploadURL(input: $input) { presignedPost { url fields } }
+    createImageUploadURL(input: $input) {
+      presignedPost { url fields }
+      presignedPut { url cdnUrl key }
+    }
+  }`,
+    confirmImageUpload: `mutation ($input: ConfirmImageUploadInput!) {
+    confirmImageUpload(input: $input) { ok cdnUrl }
   }`,
 };
 
@@ -35530,9 +35536,29 @@ async function uploadImage(client, absolutePath) {
     if (buffer.byteLength > MAX_IMAGE_BYTES) {
         throw new Error(`Image ${path.basename(absolutePath)} is ${Math.round(buffer.byteLength / 1_000_000)} MB; the API limit is 8 MB.`);
     }
-    // The presigned URL expires in 60 seconds — upload immediately.
+    // The presigned URL expires shortly — upload immediately.
     const data = await client.request(gql_1.MUTATIONS.createImageUploadURL, { input: { contentType } });
-    const { url, fields } = data.createImageUploadURL.presignedPost;
+    const { presignedPost, presignedPut } = data.createImageUploadURL;
+    if (presignedPut) {
+        const response = await fetch(presignedPut.url, {
+            method: "PUT",
+            headers: { "Content-Type": contentType },
+            body: buffer,
+        });
+        if (!response.ok) {
+            throw new gql_1.GqlError(`Image upload for ${path.basename(absolutePath)} failed with HTTP ${response.status}.`);
+        }
+        // A PUT can't enforce the size cap the way the legacy POST flow did —
+        // confirmImageUpload does that check after the fact and deletes the
+        // object if it's over the limit. Our own MAX_IMAGE_BYTES check above
+        // should already prevent this in practice.
+        const confirmed = await client.request(gql_1.MUTATIONS.confirmImageUpload, { input: { key: presignedPut.key } });
+        if (!confirmed.confirmImageUpload.ok) {
+            throw new gql_1.GqlError(`Image ${path.basename(absolutePath)} was rejected after upload (exceeds the API's 8 MB limit).`);
+        }
+        return confirmed.confirmImageUpload.cdnUrl ?? presignedPut.cdnUrl;
+    }
+    const { url, fields } = presignedPost;
     const form = new FormData();
     for (const [name, value] of Object.entries(fields)) {
         form.append(name, value);
@@ -35542,7 +35568,7 @@ async function uploadImage(client, absolutePath) {
     if (!response.ok) {
         throw new gql_1.GqlError(`Image upload for ${path.basename(absolutePath)} failed with HTTP ${response.status}.`);
     }
-    // The API does not return the final URL; it is derived from the S3 key.
+    // The API does not return the final URL; it is derived from the storage key.
     return `${CDN_BASE_URL}/${fields.key}`;
 }
 function rewriteImagePath(markdown, originalPath, cdnUrl) {
