@@ -71,14 +71,46 @@ export async function uploadImage(
     );
   }
 
-  // The presigned URL expires in 60 seconds — upload immediately.
+  // The presigned URL expires shortly — upload immediately.
   const data = await client.request<{
     createImageUploadURL: {
       presignedPost: { url: string; fields: Record<string, string> };
+      presignedPut: { url: string; cdnUrl: string; key: string } | null;
     };
   }>(MUTATIONS.createImageUploadURL, { input: { contentType } });
 
-  const { url, fields } = data.createImageUploadURL.presignedPost;
+  const { presignedPost, presignedPut } = data.createImageUploadURL;
+
+  if (presignedPut) {
+    const response = await fetch(presignedPut.url, {
+      method: "PUT",
+      headers: { "Content-Type": contentType },
+      body: buffer,
+    });
+    if (!response.ok) {
+      throw new GqlError(
+        `Image upload for ${path.basename(absolutePath)} failed with HTTP ${response.status}.`
+      );
+    }
+
+    // A PUT can't enforce the size cap the way the legacy POST flow did —
+    // confirmImageUpload does that check after the fact and deletes the
+    // object if it's over the limit. Our own MAX_IMAGE_BYTES check above
+    // should already prevent this in practice.
+    const confirmed = await client.request<{
+      confirmImageUpload: { ok: boolean; cdnUrl: string | null };
+    }>(MUTATIONS.confirmImageUpload, { input: { key: presignedPut.key } });
+
+    if (!confirmed.confirmImageUpload.ok) {
+      throw new GqlError(
+        `Image ${path.basename(absolutePath)} was rejected after upload (exceeds the API's 8 MB limit).`
+      );
+    }
+
+    return confirmed.confirmImageUpload.cdnUrl ?? presignedPut.cdnUrl;
+  }
+
+  const { url, fields } = presignedPost;
   const form = new FormData();
   for (const [name, value] of Object.entries(fields)) {
     form.append(name, value);
@@ -92,7 +124,7 @@ export async function uploadImage(
     );
   }
 
-  // The API does not return the final URL; it is derived from the S3 key.
+  // The API does not return the final URL; it is derived from the storage key.
   return `${CDN_BASE_URL}/${fields.key}`;
 }
 
