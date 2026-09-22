@@ -35425,7 +35425,6 @@ exports.MUTATIONS = {
   }`,
     createImageUploadURL: `mutation ($input: CreateImageUploadInput!) {
     createImageUploadURL(input: $input) {
-      presignedPost { url fields }
       presignedPut { url cdnUrl key }
     }
   }`,
@@ -35485,7 +35484,6 @@ exports.processImages = processImages;
 const fs = __importStar(__nccwpck_require__(1943));
 const path = __importStar(__nccwpck_require__(6928));
 const gql_1 = __nccwpck_require__(7323);
-const CDN_BASE_URL = "https://cdn.hashnode.com";
 const MAX_IMAGE_BYTES = 8_000_000;
 const CONTENT_TYPES = {
     ".jpg": "image/jpeg",
@@ -35538,38 +35536,24 @@ async function uploadImage(client, absolutePath) {
     }
     // The presigned URL expires shortly — upload immediately.
     const data = await client.request(gql_1.MUTATIONS.createImageUploadURL, { input: { contentType } });
-    const { presignedPost, presignedPut } = data.createImageUploadURL;
-    if (presignedPut) {
-        const response = await fetch(presignedPut.url, {
-            method: "PUT",
-            headers: { "Content-Type": contentType },
-            body: buffer,
-        });
-        if (!response.ok) {
-            throw new gql_1.GqlError(`Image upload for ${path.basename(absolutePath)} failed with HTTP ${response.status}.`);
-        }
-        // A PUT can't enforce the size cap the way the legacy POST flow did —
-        // confirmImageUpload does that check after the fact and deletes the
-        // object if it's over the limit. Our own MAX_IMAGE_BYTES check above
-        // should already prevent this in practice.
-        const confirmed = await client.request(gql_1.MUTATIONS.confirmImageUpload, { input: { key: presignedPut.key } });
-        if (!confirmed.confirmImageUpload.ok) {
-            throw new gql_1.GqlError(`Image ${path.basename(absolutePath)} was rejected after upload (exceeds the API's 8 MB limit).`);
-        }
-        return confirmed.confirmImageUpload.cdnUrl ?? presignedPut.cdnUrl;
-    }
-    const { url, fields } = presignedPost;
-    const form = new FormData();
-    for (const [name, value] of Object.entries(fields)) {
-        form.append(name, value);
-    }
-    form.append("file", new Blob([buffer], { type: contentType }));
-    const response = await fetch(url, { method: "POST", body: form });
+    const { presignedPut } = data.createImageUploadURL;
+    const response = await fetch(presignedPut.url, {
+        method: "PUT",
+        headers: { "Content-Type": contentType },
+        body: buffer,
+    });
     if (!response.ok) {
         throw new gql_1.GqlError(`Image upload for ${path.basename(absolutePath)} failed with HTTP ${response.status}.`);
     }
-    // The API does not return the final URL; it is derived from the storage key.
-    return `${CDN_BASE_URL}/${fields.key}`;
+    // A PUT can't enforce the size cap the way the legacy POST flow did —
+    // confirmImageUpload does that check after the fact and deletes the
+    // object if it's over the limit. Our own MAX_IMAGE_BYTES check above
+    // should already prevent this in practice.
+    const confirmed = await client.request(gql_1.MUTATIONS.confirmImageUpload, { input: { key: presignedPut.key } });
+    if (!confirmed.confirmImageUpload.ok) {
+        throw new gql_1.GqlError(`Image ${path.basename(absolutePath)} was rejected after upload (exceeds the API's 8 MB limit).`);
+    }
+    return confirmed.confirmImageUpload.cdnUrl ?? presignedPut.cdnUrl;
 }
 function rewriteImagePath(markdown, originalPath, cdnUrl) {
     return markdown.replaceAll(new RegExp(`(!\\[[^\\]]*\\]\\(\\s*)${originalPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=[)\\s])`, "g"), `$1${cdnUrl}`);

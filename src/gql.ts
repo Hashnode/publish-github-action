@@ -94,7 +94,6 @@ export const MUTATIONS = {
   }`,
   createImageUploadURL: `mutation ($input: CreateImageUploadInput!) {
     createImageUploadURL(input: $input) {
-      presignedPost { url fields }
       presignedPut { url cdnUrl key }
     }
   }`,

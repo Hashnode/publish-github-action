@@ -75,13 +75,12 @@ describe("uploadImage", () => {
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
-  it("uses presignedPut when available: PUTs the file, then confirms", async () => {
+  it("PUTs the file to presignedPut.url, then confirms", async () => {
     const client: GqlRequester = {
       request: vi
         .fn()
         .mockResolvedValueOnce({
           createImageUploadURL: {
-            presignedPost: { url: "https://storage.invalid/post", fields: { key: "legacy/key.png" } },
             presignedPut: {
               url: "https://storage.invalid/put",
               cdnUrl: "https://cdn.hashnode.com/uploads/gql/u/key.png",
@@ -111,7 +110,6 @@ describe("uploadImage", () => {
         .fn()
         .mockResolvedValueOnce({
           createImageUploadURL: {
-            presignedPost: { url: "https://storage.invalid/post", fields: { key: "legacy/key.png" } },
             presignedPut: {
               url: "https://storage.invalid/put",
               cdnUrl: "https://cdn.hashnode.com/uploads/gql/u/key.png",
@@ -124,27 +122,6 @@ describe("uploadImage", () => {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
 
     await expect(uploadImage(client, imagePath)).rejects.toThrow(/8 MB limit/);
-  });
-
-  it("falls back to presignedPost when presignedPut is null", async () => {
-    const client: GqlRequester = {
-      request: vi.fn().mockResolvedValueOnce({
-        createImageUploadURL: {
-          presignedPost: { url: "https://storage.invalid/post", fields: { key: "legacy/key.png" } },
-          presignedPut: null,
-        },
-      }),
-    };
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
-
-    const result = await uploadImage(client, imagePath);
-
-    expect(result).toBe("https://cdn.hashnode.com/legacy/key.png");
-    expect(fetch).toHaveBeenCalledWith(
-      "https://storage.invalid/post",
-      expect.objectContaining({ method: "POST" })
-    );
-    expect(client.request).toHaveBeenCalledTimes(1);
   });
 });
 
