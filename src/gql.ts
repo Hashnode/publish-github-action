@@ -46,6 +46,7 @@ export class GqlClient implements GqlRequester {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${this.token}`,
+        "x-hashnode-client": "publish-github-action",
       },
       body,
     });
