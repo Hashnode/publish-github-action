@@ -93,3 +93,14 @@ describe("parsePostFile security", () => {
     expect(g.__frontmatterCodeRan).toBeUndefined();
   });
 });
+
+describe("parsePostFile unquoted YAML values", () => {
+  it("keeps an unquoted publishedAt timestamp, the format the README shows", () => {
+    const { post } = parsePostFile("---\ntitle: T\npublishedAt: 2026-07-01T09:00:00Z\n---\nbody");
+    expect(post?.frontmatter.publishedAt).toBe("2026-07-01T09:00:00.000Z");
+  });
+  it("keeps a numeric title", () => {
+    const { post } = parsePostFile("---\ntitle: 2024\n---\nbody");
+    expect(post?.frontmatter.title).toBe("2024");
+  });
+});

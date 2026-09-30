@@ -27,6 +27,11 @@ export function slugify(value: string): string {
 
 function asString(value: unknown): string | undefined {
   if (typeof value === "string" && value.trim() !== "") return value.trim();
+  // YAML turns an unquoted `2025-01-15T09:00:00Z` into a Date and `2024` into
+  // a number. Dropping them would silently publish with today's date, or fail
+  // with "missing title".
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
   return undefined;
 }
 
