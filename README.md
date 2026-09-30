@@ -47,7 +47,7 @@ jobs:
 
 ## Frontmatter
 
-Every post needs YAML frontmatter. `title` is required; a stable `slug` is strongly recommended because it is how the action matches a file to an existing post on later pushes.
+Every post needs YAML frontmatter. JavaScript (`---js`) frontmatter is not supported and the file is reported as an error. `title` is required; a stable `slug` is strongly recommended because it is how the action matches a file to an existing post on later pushes.
 
 ```yaml
 ---

@@ -81,3 +81,15 @@ describe("parsePostFile", () => {
     expect(errors.join(" ")).toContain("coAuthors");
   });
 });
+
+describe("parsePostFile security", () => {
+  it("rejects ---js frontmatter instead of evaluating it", () => {
+    const g = globalThis as Record<string, unknown>;
+    delete g.__frontmatterCodeRan;
+    const md = "---js\n{ title: (globalThis.__frontmatterCodeRan = true, 'Evil') }\n---\nbody";
+    const { post, errors } = parsePostFile(md);
+    expect(post).toBeUndefined();
+    expect(errors.join()).toMatch(/JavaScript frontmatter is not supported/);
+    expect(g.__frontmatterCodeRan).toBeUndefined();
+  });
+});

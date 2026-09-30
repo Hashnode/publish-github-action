@@ -35239,6 +35239,15 @@ exports.parsePostFile = parsePostFile;
 const gray_matter_1 = __importDefault(__nccwpck_require__(9599));
 const MAX_TAGS = 15;
 const MAX_CO_AUTHORS = 4;
+// gray-matter evals `---js` frontmatter by default, which would run code from
+// any markdown file in the repo, in a job that holds the access token. Only
+// YAML (and JSON) frontmatter is accepted.
+const refuseCode = {
+    parse() {
+        throw new Error("JavaScript frontmatter is not supported. Use YAML.");
+    },
+};
+const MATTER_OPTIONS = { engines: { js: refuseCode, javascript: refuseCode } };
 // Same normalization the API applies to tag slugs.
 function slugify(value) {
     return value
@@ -35282,7 +35291,7 @@ function asList(value) {
 function parsePostFile(content) {
     let parsed;
     try {
-        parsed = (0, gray_matter_1.default)(content);
+        parsed = (0, gray_matter_1.default)(content, MATTER_OPTIONS);
     }
     catch (error) {
         return { errors: [`Invalid frontmatter: ${error.message}`] };

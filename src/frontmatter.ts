@@ -4,6 +4,16 @@ import type { PostFrontmatter } from "./types";
 const MAX_TAGS = 15;
 const MAX_CO_AUTHORS = 4;
 
+// gray-matter evals `---js` frontmatter by default, which would run code from
+// any markdown file in the repo, in a job that holds the access token. Only
+// YAML (and JSON) frontmatter is accepted.
+const refuseCode = {
+  parse(): never {
+    throw new Error("JavaScript frontmatter is not supported. Use YAML.");
+  },
+};
+const MATTER_OPTIONS = { engines: { js: refuseCode, javascript: refuseCode } };
+
 // Same normalization the API applies to tag slugs.
 export function slugify(value: string): string {
   return value
@@ -57,7 +67,7 @@ export interface ParseOutcome {
 export function parsePostFile(content: string): ParseOutcome {
   let parsed: matter.GrayMatterFile<string>;
   try {
-    parsed = matter(content);
+    parsed = matter(content, MATTER_OPTIONS);
   } catch (error) {
     return { errors: [`Invalid frontmatter: ${(error as Error).message}`] };
   }
