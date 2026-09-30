@@ -35403,10 +35403,19 @@ class GqlClient {
             },
             body,
         });
-        if (!response.ok) {
+        // GraphQL validation errors come back as HTTP 400 with the real message in
+        // the body, so read the body before falling back to the bare status.
+        const text = await response.text();
+        let payload = {};
+        try {
+            payload = JSON.parse(text);
+        }
+        catch {
+            // not JSON, handled below
+        }
+        if (!response.ok && !payload.errors?.length) {
             throw new GqlError(`API request failed with HTTP ${response.status}.`);
         }
-        const payload = (await response.json());
         if (payload.errors?.length) {
             const first = payload.errors[0];
             throw new GqlError(first.message, first.extensions?.code);
