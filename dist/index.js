@@ -35239,6 +35239,15 @@ exports.parsePostFile = parsePostFile;
 const gray_matter_1 = __importDefault(__nccwpck_require__(9599));
 const MAX_TAGS = 15;
 const MAX_CO_AUTHORS = 4;
+// gray-matter evals `---js` frontmatter by default, which would run code from
+// any markdown file in the repo, in a job that holds the access token. Only
+// YAML (and JSON) frontmatter is accepted.
+const refuseCode = {
+    parse() {
+        throw new Error("JavaScript frontmatter is not supported. Use YAML.");
+    },
+};
+const MATTER_OPTIONS = { engines: { js: refuseCode, javascript: refuseCode } };
 // Same normalization the API applies to tag slugs.
 function slugify(value) {
     return value
@@ -35252,6 +35261,13 @@ function slugify(value) {
 function asString(value) {
     if (typeof value === "string" && value.trim() !== "")
         return value.trim();
+    // YAML turns an unquoted `2025-01-15T09:00:00Z` into a Date and `2024` into
+    // a number. Dropping them would silently publish with today's date, or fail
+    // with "missing title".
+    if (value instanceof Date && !Number.isNaN(value.getTime()))
+        return value.toISOString();
+    if (typeof value === "number" && Number.isFinite(value))
+        return String(value);
     return undefined;
 }
 function asBoolean(value) {
@@ -35282,7 +35298,7 @@ function asList(value) {
 function parsePostFile(content) {
     let parsed;
     try {
-        parsed = (0, gray_matter_1.default)(content);
+        parsed = (0, gray_matter_1.default)(content, MATTER_OPTIONS);
     }
     catch (error) {
         return { errors: [`Invalid frontmatter: ${error.message}`] };
@@ -35384,13 +35400,23 @@ class GqlClient {
             headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${this.token}`,
+                "x-hashnode-client": "publish-github-action",
             },
             body,
         });
-        if (!response.ok) {
+        // GraphQL validation errors come back as HTTP 400 with the real message in
+        // the body, so read the body before falling back to the bare status.
+        const text = await response.text();
+        let payload = {};
+        try {
+            payload = JSON.parse(text);
+        }
+        catch {
+            // not JSON, handled below
+        }
+        if (!response.ok && !payload.errors?.length) {
             throw new GqlError(`API request failed with HTTP ${response.status}.`);
         }
-        const payload = (await response.json());
         if (payload.errors?.length) {
             const first = payload.errors[0];
             throw new GqlError(first.message, first.extensions?.code);

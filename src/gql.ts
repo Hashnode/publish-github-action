@@ -46,18 +46,28 @@ export class GqlClient implements GqlRequester {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${this.token}`,
+        "x-hashnode-client": "publish-github-action",
       },
       body,
     });
 
-    if (!response.ok) {
-      throw new GqlError(`API request failed with HTTP ${response.status}.`);
-    }
-
-    const payload = (await response.json()) as {
+    type Payload = {
       data?: T;
       errors?: Array<{ message: string; extensions?: { code?: string } }>;
     };
+    // GraphQL validation errors come back as HTTP 400 with the real message in
+    // the body, so read the body before falling back to the bare status.
+    const text = await response.text();
+    let payload: Payload = {};
+    try {
+      payload = JSON.parse(text) as Payload;
+    } catch {
+      // not JSON, handled below
+    }
+
+    if (!response.ok && !payload.errors?.length) {
+      throw new GqlError(`API request failed with HTTP ${response.status}.`);
+    }
 
     if (payload.errors?.length) {
       const first = payload.errors[0];

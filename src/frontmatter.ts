@@ -4,6 +4,16 @@ import type { PostFrontmatter } from "./types";
 const MAX_TAGS = 15;
 const MAX_CO_AUTHORS = 4;
 
+// gray-matter evals `---js` frontmatter by default, which would run code from
+// any markdown file in the repo, in a job that holds the access token. Only
+// YAML (and JSON) frontmatter is accepted.
+const refuseCode = {
+  parse(): never {
+    throw new Error("JavaScript frontmatter is not supported. Use YAML.");
+  },
+};
+const MATTER_OPTIONS = { engines: { js: refuseCode, javascript: refuseCode } };
+
 // Same normalization the API applies to tag slugs.
 export function slugify(value: string): string {
   return value
@@ -17,6 +27,11 @@ export function slugify(value: string): string {
 
 function asString(value: unknown): string | undefined {
   if (typeof value === "string" && value.trim() !== "") return value.trim();
+  // YAML turns an unquoted `2025-01-15T09:00:00Z` into a Date and `2024` into
+  // a number. Dropping them would silently publish with today's date, or fail
+  // with "missing title".
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
   return undefined;
 }
 
@@ -57,7 +72,7 @@ export interface ParseOutcome {
 export function parsePostFile(content: string): ParseOutcome {
   let parsed: matter.GrayMatterFile<string>;
   try {
-    parsed = matter(content);
+    parsed = matter(content, MATTER_OPTIONS);
   } catch (error) {
     return { errors: [`Invalid frontmatter: ${(error as Error).message}`] };
   }

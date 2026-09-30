@@ -81,3 +81,26 @@ describe("parsePostFile", () => {
     expect(errors.join(" ")).toContain("coAuthors");
   });
 });
+
+describe("parsePostFile security", () => {
+  it("rejects ---js frontmatter instead of evaluating it", () => {
+    const g = globalThis as Record<string, unknown>;
+    delete g.__frontmatterCodeRan;
+    const md = "---js\n{ title: (globalThis.__frontmatterCodeRan = true, 'Evil') }\n---\nbody";
+    const { post, errors } = parsePostFile(md);
+    expect(post).toBeUndefined();
+    expect(errors.join()).toMatch(/JavaScript frontmatter is not supported/);
+    expect(g.__frontmatterCodeRan).toBeUndefined();
+  });
+});
+
+describe("parsePostFile unquoted YAML values", () => {
+  it("keeps an unquoted publishedAt timestamp, the format the README shows", () => {
+    const { post } = parsePostFile("---\ntitle: T\npublishedAt: 2026-07-01T09:00:00Z\n---\nbody");
+    expect(post?.frontmatter.publishedAt).toBe("2026-07-01T09:00:00.000Z");
+  });
+  it("keeps a numeric title", () => {
+    const { post } = parsePostFile("---\ntitle: 2024\n---\nbody");
+    expect(post?.frontmatter.title).toBe("2024");
+  });
+});
