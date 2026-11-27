@@ -35510,6 +35510,7 @@ exports.processImages = processImages;
 const fs = __importStar(__nccwpck_require__(1943));
 const path = __importStar(__nccwpck_require__(6928));
 const gql_1 = __nccwpck_require__(7323);
+const paths_1 = __nccwpck_require__(8431);
 const MAX_IMAGE_BYTES = 8_000_000;
 const CONTENT_TYPES = {
     ".jpg": "image/jpeg",
@@ -35593,13 +35594,13 @@ async function processImages(client, workspace, markdownFile, markdown, cover) {
     let resultCover = cover;
     let uploaded = 0;
     for (const imagePath of findLocalImagePaths(markdown)) {
-        const absolute = resolveImagePath(workspace, markdownFile, imagePath);
+        const absolute = await (0, paths_1.realPathInsideWorkspace)(workspace, resolveImagePath(workspace, markdownFile, imagePath), `Image path "${imagePath}"`);
         const cdnUrl = await uploadImage(client, absolute);
         resultMarkdown = rewriteImagePath(resultMarkdown, imagePath, cdnUrl);
         uploaded += 1;
     }
     if (resultCover && !isRemoteUrl(resultCover)) {
-        const absolute = resolveImagePath(workspace, markdownFile, resultCover);
+        const absolute = await (0, paths_1.realPathInsideWorkspace)(workspace, resolveImagePath(workspace, markdownFile, resultCover), `Cover image "${resultCover}"`);
         resultCover = await uploadImage(client, absolute);
         uploaded += 1;
     }
@@ -35823,6 +35824,86 @@ function readInputs() {
 
 /***/ }),
 
+/***/ 8431:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.realPathInsideWorkspace = realPathInsideWorkspace;
+const fs = __importStar(__nccwpck_require__(1943));
+const path = __importStar(__nccwpck_require__(6928));
+// macOS and Windows file systems are case-insensitive by default, so a
+// reference whose case differs from the file on disk still names that file.
+const caseInsensitive = process.platform === "darwin" || process.platform === "win32";
+function samePath(a, b) {
+    return caseInsensitive ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
+/**
+ * Returns the real path of a file inside the repository. Symlinks aren't
+ * supported, for the file itself or any directory above it.
+ */
+async function realPathInsideWorkspace(workspace, absolutePath, label) {
+    const realWorkspace = await fs.realpath(workspace);
+    const relative = path.relative(workspace, absolutePath);
+    if (relative === "" ||
+        relative === ".." ||
+        relative.startsWith(".." + path.sep) ||
+        path.isAbsolute(relative)) {
+        throw new Error(`${label} points outside the repository.`);
+    }
+    let real;
+    try {
+        real = await fs.realpath(absolutePath);
+    }
+    catch {
+        throw new Error(`${label} not found.`);
+    }
+    if (!real.startsWith(realWorkspace + path.sep)) {
+        throw new Error(`${label} points outside the repository.`);
+    }
+    if (!samePath(real, path.join(realWorkspace, relative))) {
+        throw new Error(`${label} is a symlink, which isn't supported.`);
+    }
+    return real;
+}
+
+
+/***/ }),
+
 /***/ 4448:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -35869,6 +35950,7 @@ const path = __importStar(__nccwpck_require__(6928));
 const gql_1 = __nccwpck_require__(7323);
 const frontmatter_1 = __nccwpck_require__(1593);
 const images_1 = __nccwpck_require__(4525);
+const paths_1 = __nccwpck_require__(8431);
 function omitUndefined(input) {
     return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
 }
@@ -36003,7 +36085,13 @@ function buildDraftInput(publicationId, frontmatter, markdown, cover, refs) {
     });
 }
 async function processFile(ctx, relativePath) {
-    const absolutePath = path.join(ctx.workspace, relativePath);
+    let absolutePath;
+    try {
+        absolutePath = await (0, paths_1.realPathInsideWorkspace)(ctx.workspace, path.join(ctx.workspace, relativePath), `Post file "${relativePath}"`);
+    }
+    catch (error) {
+        return { file: relativePath, action: "error", message: error.message };
+    }
     const raw = await fs.readFile(absolutePath, "utf8");
     const { post, errors } = (0, frontmatter_1.parsePostFile)(raw);
     if (!post) {

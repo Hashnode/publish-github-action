@@ -3,6 +3,7 @@ import * as path from "path";
 import { MUTATIONS, QUERIES, type GqlRequester } from "./gql";
 import { parsePostFile } from "./frontmatter";
 import { processImages } from "./images";
+import { realPathInsideWorkspace } from "./paths";
 import type { FileResult, PostFrontmatter } from "./types";
 
 export interface SyncContext {
@@ -211,7 +212,16 @@ function buildDraftInput(
 }
 
 export async function processFile(ctx: SyncContext, relativePath: string): Promise<FileResult> {
-  const absolutePath = path.join(ctx.workspace, relativePath);
+  let absolutePath: string;
+  try {
+    absolutePath = await realPathInsideWorkspace(
+      ctx.workspace,
+      path.join(ctx.workspace, relativePath),
+      `Post file "${relativePath}"`
+    );
+  } catch (error) {
+    return { file: relativePath, action: "error", message: (error as Error).message };
+  }
   const raw = await fs.readFile(absolutePath, "utf8");
 
   const { post, errors } = parsePostFile(raw);

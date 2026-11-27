@@ -1,6 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { GqlError, MUTATIONS, type GqlRequester } from "./gql";
+import { realPathInsideWorkspace } from "./paths";
 
 const MAX_IMAGE_BYTES = 8_000_000;
 
@@ -143,14 +144,22 @@ export async function processImages(
   let uploaded = 0;
 
   for (const imagePath of findLocalImagePaths(markdown)) {
-    const absolute = resolveImagePath(workspace, markdownFile, imagePath);
+    const absolute = await realPathInsideWorkspace(
+      workspace,
+      resolveImagePath(workspace, markdownFile, imagePath),
+      `Image path "${imagePath}"`
+    );
     const cdnUrl = await uploadImage(client, absolute);
     resultMarkdown = rewriteImagePath(resultMarkdown, imagePath, cdnUrl);
     uploaded += 1;
   }
 
   if (resultCover && !isRemoteUrl(resultCover)) {
-    const absolute = resolveImagePath(workspace, markdownFile, resultCover);
+    const absolute = await realPathInsideWorkspace(
+      workspace,
+      resolveImagePath(workspace, markdownFile, resultCover),
+      `Cover image "${resultCover}"`
+    );
     resultCover = await uploadImage(client, absolute);
     uploaded += 1;
   }
